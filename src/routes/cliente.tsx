@@ -23,7 +23,7 @@ export const Route = createFileRoute("/cliente")({
 
 const NAV: NavItem[] = [
   { to: "/cliente", label: "Visão Geral", icon: LayoutGrid, exact: true },
-  { to: "/cliente/proxies", label: "Meus Proxies Ativos", icon: Network, badge: "14" },
+  { to: "/cliente/proxies", label: "Meus Proxies Ativos", icon: Network },
   { to: "/cliente/comprar", label: "Comprar / Adicionar Saldo", icon: Plus },
   { to: "/cliente/gerador", label: "Gerador de Listas", icon: FileDown },
   { to: "/cliente/api", label: "API & Integrações", icon: Code2 },
@@ -40,13 +40,14 @@ function ClienteLayout() {
 }
 
 function Shell() {
-  const { balance, setPixOpen, pixOpen, addBalance } = useClientStore();
+  const { balance, setPixOpen, pixOpen, addBalance, profile, proxies } = useClientStore();
   const { format } = useCurrency();
+  const nav = NAV.map((item) => (item.to === "/cliente/proxies" ? { ...item, badge: String(proxies.length) } : item));
   return (
     <DashboardShell
       area="Área do Cliente"
-      nav={NAV}
-      user={{ name: "Lucas Oliveira", email: "lucas.oliveira@gmail.com" }}
+      nav={nav}
+      user={{ name: profile.full_name, email: profile.email }}
       topRight={
         <button
           onClick={() => setPixOpen(true)}

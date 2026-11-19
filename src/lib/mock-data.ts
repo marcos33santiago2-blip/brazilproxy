@@ -61,7 +61,15 @@ export const PROXIES: Proxy[] = Array.from({ length: 14 }, (_, i) => {
   };
 });
 
-export const TRANSACTIONS = [
+export type LedgerEntry = {
+  id: string;
+  date: string;
+  desc: string;
+  amount: number;
+  type: "credito" | "debito";
+};
+
+export const TRANSACTIONS: LedgerEntry[] = [
   { id: "#PX-48211", date: "19/11/2026 08:42", desc: "Recarga via Pix", amount: 250, type: "credito" as const },
   { id: "#PX-48190", date: "18/11/2026 22:10", desc: "10x ISP Estático · Brasil", amount: -149, type: "debito" as const },
   { id: "#PX-48122", date: "17/11/2026 14:05", desc: "5 GB Residencial · EUA", amount: -85.05, type: "debito" as const },

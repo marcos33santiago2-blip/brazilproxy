@@ -12,8 +12,9 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/cliente/")({ component: Overview });
 
 function Overview() {
-  const { balance, proxies, transactions, setPixOpen } = useClientStore();
+  const { balance, proxies, transactions, setPixOpen, profile } = useClientStore();
   const { format } = useCurrency();
+  const firstName = profile.full_name.split(" ")[0] ?? profile.full_name;
   const online = proxies.filter((p) => p.status === "online").length;
   const expiring = proxies.filter((p) => p.daysLeft <= 5).length;
   const totalGb = USAGE_30D.reduce((s, d) => s + d.gb, 0);
@@ -21,7 +22,7 @@ function Overview() {
   return (
     <>
       <PageHeader
-        title="Olá, Lucas 👋"
+        title={`Olá, ${firstName} 👋`}
         description="Aqui está um resumo da sua operação nos últimos 30 dias."
         actions={
           <>

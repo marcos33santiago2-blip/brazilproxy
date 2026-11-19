@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ClienteRouteImport } from './routes/cliente'
+import { Route as CriarContaRouteImport } from './routes/criar-conta'
 import { Route as EntrarRouteImport } from './routes/entrar'
 import { Route as RevendaRouteImport } from './routes/revenda'
 import { Route as ClienteIndexRouteImport } from './routes/cliente.index'
@@ -25,6 +26,11 @@ const IndexRoute = IndexRouteImport.update({
 const ClienteRoute = ClienteRouteImport.update({
   id: '/cliente',
   path: '/cliente',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CriarContaRoute = CriarContaRouteImport.update({
+  id: '/criar-conta',
+  path: '/criar-conta',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EntrarRoute = EntrarRouteImport.update({
@@ -56,6 +62,7 @@ const ClienteProxiesRoute = ClienteProxiesRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/cliente': typeof ClienteRouteWithChildren
+  '/criar-conta': typeof CriarContaRoute
   '/entrar': typeof EntrarRoute
   '/revenda': typeof RevendaRoute
   '/cliente/comprar': typeof ClienteComprarRoute
@@ -64,6 +71,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/criar-conta': typeof CriarContaRoute
   '/entrar': typeof EntrarRoute
   '/revenda': typeof RevendaRoute
   '/cliente/comprar': typeof ClienteComprarRoute
@@ -74,6 +82,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/cliente': typeof ClienteRouteWithChildren
+  '/criar-conta': typeof CriarContaRoute
   '/entrar': typeof EntrarRoute
   '/revenda': typeof RevendaRoute
   '/cliente/comprar': typeof ClienteComprarRoute
@@ -85,6 +94,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/cliente'
+    | '/criar-conta'
     | '/entrar'
     | '/revenda'
     | '/cliente/comprar'
@@ -93,6 +103,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/criar-conta'
     | '/entrar'
     | '/revenda'
     | '/cliente/comprar'
@@ -102,6 +113,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/cliente'
+    | '/criar-conta'
     | '/entrar'
     | '/revenda'
     | '/cliente/comprar'
@@ -112,6 +124,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ClienteRoute: typeof ClienteRouteWithChildren
+  CriarContaRoute: typeof CriarContaRoute
   EntrarRoute: typeof EntrarRoute
   RevendaRoute: typeof RevendaRoute
 }
@@ -130,6 +143,13 @@ declare module '@tanstack/react-router' {
       path: '/cliente'
       fullPath: '/cliente'
       preLoaderRoute: typeof ClienteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/criar-conta': {
+      id: '/criar-conta'
+      path: '/criar-conta'
+      fullPath: '/criar-conta'
+      preLoaderRoute: typeof CriarContaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/entrar': {
@@ -188,6 +208,7 @@ const ClienteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ClienteRoute: ClienteRouteWithChildren,
+  CriarContaRoute: CriarContaRoute,
   EntrarRoute: EntrarRoute,
   RevendaRoute: RevendaRoute,
 }

@@ -106,7 +106,7 @@ export function SiteHeader() {
           <CurrencyToggle tone="night" />
           <Link to="/entrar" className={navLink}>Entrar</Link>
           <Button variant="brand" asChild>
-            <Link to="/entrar" search={{ modo: "cadastro" }}>Criar Conta</Link>
+            <Link to="/criar-conta">Criar Conta</Link>
           </Button>
         </div>
         <Sheet open={open} onOpenChange={setOpen}>
@@ -127,7 +127,7 @@ export function SiteHeader() {
               <div className="my-3"><CurrencyToggle /></div>
               <Button variant="outline" asChild><Link to="/entrar">Entrar</Link></Button>
               <Button variant="brand" className="mt-2" asChild>
-                <Link to="/entrar" search={{ modo: "cadastro" }}>Criar Conta</Link>
+                <Link to="/criar-conta">Criar Conta</Link>
               </Button>
             </div>
           </SheetContent>

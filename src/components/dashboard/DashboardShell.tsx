@@ -1,10 +1,12 @@
 import { useState, type ReactNode } from "react";
-import { Link, type LinkProps } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate, type LinkProps } from "@tanstack/react-router";
 import { Bell, LogOut, Menu, Search, type LucideIcon } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { LogoMark } from "@/components/brand/Logo";
 import { BRAND } from "@/config/brand";
+import { clearSession } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 export type NavItem = { to: LinkProps["to"]; label: string; icon: LucideIcon; exact?: boolean; badge?: string };
@@ -37,11 +39,25 @@ function SidebarContent({ area, nav, footer, onNavigate }: { area: string; nav: 
       </nav>
       {footer && <div className="border-t border-sidebar-border p-4">{footer}</div>}
       <div className="border-t border-sidebar-border p-3">
-        <Link to="/" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-night-muted hover:bg-sidebar-accent hover:text-sidebar-foreground">
-          <LogOut className="size-4" /> Sair
-        </Link>
+        <SignOutButton />
       </div>
     </div>
+  );
+}
+
+function SignOutButton() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  return (
+    <button
+      type="button"
+      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-night-muted hover:bg-sidebar-accent hover:text-sidebar-foreground"
+      onClick={() => {
+        void clearSession(queryClient).then(() => navigate({ to: "/entrar" }));
+      }}
+    >
+      <LogOut className="size-4" /> Sair
+    </button>
   );
 }
 

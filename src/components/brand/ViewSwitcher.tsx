@@ -3,7 +3,7 @@ import { Briefcase, Globe, LayoutDashboard, Shield, Store } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const VIEWS = [
-  { to: "/", label: "Site", icon: Globe, match: (p: string) => p === "/" || p === "/entrar" },
+  { to: "/", label: "Site", icon: Globe, match: (p: string) => p === "/" || p === "/entrar" || p === "/criar-conta" },
   { to: "/revenda", label: "Revenda", icon: Store, match: (p: string) => p.startsWith("/revenda") },
   { to: "/cliente", label: "Cliente", icon: LayoutDashboard, match: (p: string) => p.startsWith("/cliente") },
   { to: "/revendedor", label: "Revendedor", icon: Briefcase, match: (p: string) => p.startsWith("/revendedor") },

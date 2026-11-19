@@ -45,7 +45,7 @@ function Index() {
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Button variant="brand" size="xl" asChild>
-                <Link to="/entrar" search={{ modo: "cadastro" }}>
+                <Link to="/criar-conta">
                   Criar conta grátis <ArrowRight />
                 </Link>
               </Button>
