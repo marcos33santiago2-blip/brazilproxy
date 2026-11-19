@@ -1,7 +1,9 @@
-import { createContext, useContext, useRef, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useActiveProxies } from "@/hooks/use-proxies";
 import { useProfile } from "@/hooks/use-profile";
 import { useTransactions } from "@/hooks/use-transactions";
+import { syncProfileFromSession } from "@/lib/auth";
 import type { LedgerEntry, Proxy } from "@/lib/mock-data";
 import type { Profile } from "@/types/database";
 
@@ -20,7 +22,18 @@ type ClientStore = {
 const Ctx = createContext<ClientStore | null>(null);
 
 export function ClientStoreProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const { data: profile } = useProfile();
+
+  useEffect(() => {
+    let cancelled = false;
+    void syncProfileFromSession().then(() => {
+      if (!cancelled) void queryClient.invalidateQueries({ queryKey: ["profile"] });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [queryClient]);
   const { data: remoteProxies } = useActiveProxies();
   const { data: remoteTransactions } = useTransactions();
 

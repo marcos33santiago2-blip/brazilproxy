@@ -35,20 +35,26 @@ function readRole(row: unknown): UserRole | null {
   return null;
 }
 
-function fullNameOf(user: User, fallback: string): string {
+function metaString(user: User, key: string): string | null {
   const meta = user.user_metadata;
-  if (typeof meta === "object" && meta !== null) {
-    const raw = (meta as Record<string, unknown>)["full_name"];
-    if (typeof raw === "string" && raw.trim()) return raw.trim();
-  }
-  return fallback.trim() || user.email || "Cliente";
+  if (typeof meta !== "object" || meta === null) return null;
+  const raw = (meta as Record<string, unknown>)[key];
+  return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+}
+
+function fullNameOf(user: User, fallback: string): string {
+  return metaString(user, "full_name") || metaString(user, "name") || fallback.trim() || user.email || "Cliente";
+}
+
+function emailOf(user: User): string {
+  return user.email || metaString(user, "email") || "";
 }
 
 /** Creates the profile row when auth succeeded and the table has no row yet. */
 export async function ensureProfile(user: User, fullName: string): Promise<UserRole> {
   if (!supabase) return "client";
-  const name = fullName.trim() || fullNameOf(user, user.email ?? "");
-  const email = user.email ?? "";
+  const name = fullName.trim() || fullNameOf(user, emailOf(user));
+  const email = emailOf(user);
 
   const existing = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
   if (!existing.error) {
@@ -67,6 +73,25 @@ export async function ensureProfile(user: User, fullName: string): Promise<UserR
     console.warn("[brazilproxy] Não foi possível criar o perfil.", inserted.error.message);
   }
   return "client";
+}
+
+export async function signInWithGoogle(): Promise<{ ok: true } | { ok: false; message: string }> {
+  if (!supabase) return { ok: false, message: "O Supabase não está configurado neste ambiente." };
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: `${window.location.origin}/cliente` },
+  });
+  if (error) return { ok: false, message: authErrorMessage(error.message) };
+  return { ok: true };
+}
+
+/** Inserts public.profiles on the first sign-in, including Google, using the provider name and email. */
+export async function syncProfileFromSession(): Promise<void> {
+  if (!supabase || import.meta.env.SSR) return;
+  const { data, error } = await supabase.auth.getSession();
+  const user = data.session?.user;
+  if (error || !user) return;
+  await ensureProfile(user, fullNameOf(user, emailOf(user)));
 }
 
 export async function signInWithPassword(email: string, password: string): Promise<AuthResult> {

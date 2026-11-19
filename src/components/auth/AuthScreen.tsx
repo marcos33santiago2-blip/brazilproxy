@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/brand/Logo";
-import { panelForRole, signInWithPassword, signUpWithPassword } from "@/lib/auth";
+import { panelForRole, signInWithGoogle, signInWithPassword, signUpWithPassword } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const demoClass =
@@ -48,6 +48,22 @@ export function AuthScreen({ mode }: { mode: "entrar" | "cadastro" }) {
       console.warn("[brazilproxy] Falha na autenticação.", err);
       toast.error("Não foi possível concluir. Tente novamente.");
     } finally {
+      setPending(false);
+    }
+  };
+
+  const onGoogle = async () => {
+    if (pending) return;
+    setPending(true);
+    try {
+      const result = await signInWithGoogle();
+      if (!result.ok) {
+        toast.error(result.message);
+        setPending(false);
+      }
+    } catch (err) {
+      console.warn("[brazilproxy] Falha no login com Google.", err);
+      toast.error("Não foi possível continuar com o Google.");
       setPending(false);
     }
   };
@@ -111,6 +127,17 @@ export function AuthScreen({ mode }: { mode: "entrar" | "cadastro" }) {
               {pending ? "Aguarde…" : mode === "entrar" ? "Entrar" : "Criar minha conta"}
             </Button>
           </form>
+          <div className="relative my-5">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-surface px-2 text-muted-foreground">ou</span>
+            </div>
+          </div>
+          <Button type="button" variant="outline" size="xl" className="w-full bg-card" disabled={pending} onClick={() => void onGoogle()}>
+            <GoogleMark /> Continuar com Google
+          </Button>
           <div className="mt-8">
             <div className="mb-3 text-center text-xs font-medium uppercase tracking-wider text-muted-foreground">Ou acesse a demonstração como</div>
             <div className="grid grid-cols-3 gap-2">
@@ -128,5 +155,16 @@ export function AuthScreen({ mode }: { mode: "entrar" | "cadastro" }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function GoogleMark() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true">
+      <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.4h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.7z" />
+      <path fill="#34A853" d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.9-3c-1.1.7-2.4 1.2-4 1.2-3.1 0-5.7-2.1-6.6-4.9H1.4v3.1A12 12 0 0 0 12 24z" />
+      <path fill="#FBBC05" d="M5.4 14.4A7.2 7.2 0 0 1 5 12c0-.8.1-1.6.4-2.4V6.5H1.4A12 12 0 0 0 0 12c0 1.9.5 3.8 1.4 5.5l4-3.1z" />
+      <path fill="#EA4335" d="M12 4.8c1.7 0 3.3.6 4.5 1.8l3.4-3.4C17.9 1.1 15.2 0 12 0 7.3 0 3.2 2.7 1.4 6.5l4 3.1C6.3 6.8 8.9 4.8 12 4.8z" />
+    </svg>
   );
 }

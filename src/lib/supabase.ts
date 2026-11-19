@@ -47,7 +47,9 @@ export async function currentSessionUser(): Promise<SessionUser | null> {
     if (error || !user) return null;
     let fullName: string | null = null;
     if (isRecord(user.user_metadata)) {
-      const raw = user.user_metadata["full_name"];
+      const full = user.user_metadata["full_name"];
+      const name = user.user_metadata["name"];
+      const raw = typeof full === "string" && full.trim() ? full : name;
       if (typeof raw === "string" && raw.trim()) fullName = raw.trim();
     }
     return { id: user.id, email: user.email ?? "", fullName };
