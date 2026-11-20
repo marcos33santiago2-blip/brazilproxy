@@ -136,7 +136,18 @@ export function mapProxyRecord(row: ProxyRecord): Proxy {
     expires: validExpires ? validExpires.toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "—",
     daysLeft,
     status: mapStatus(row.status),
+    gbUsed: row.gb_used,
+    expiresAt: row.expires_at,
   };
+}
+
+/** True when `expires_at` falls inside the next `days`, including today. Missing dates do not count. */
+export function isExpiringWithin(expiresAt: string | null | undefined, days: number, now = Date.now()): boolean {
+  if (!expiresAt) return false;
+  const at = new Date(expiresAt).getTime();
+  if (Number.isNaN(at)) return false;
+  const delta = at - now;
+  return delta >= 0 && delta <= days * 86_400_000;
 }
 
 function parseStatus(value: string | null): TransactionStatus {

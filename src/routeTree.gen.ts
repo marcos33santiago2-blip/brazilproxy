@@ -17,6 +17,7 @@ import { Route as RevendaRouteImport } from './routes/revenda'
 import { Route as ClienteIndexRouteImport } from './routes/cliente.index'
 import { Route as ClienteComprarRouteImport } from './routes/cliente.comprar'
 import { Route as ClienteProxiesRouteImport } from './routes/cliente.proxies'
+import { Route as ApiProxyPurchaseRouteImport } from './routes/api.proxy.purchase'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -58,6 +59,11 @@ const ClienteProxiesRoute = ClienteProxiesRouteImport.update({
   path: '/proxies',
   getParentRoute: () => ClienteRoute,
 } as any)
+const ApiProxyPurchaseRoute = ApiProxyPurchaseRouteImport.update({
+  id: '/api/proxy/purchase',
+  path: '/api/proxy/purchase',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -68,6 +74,7 @@ export interface FileRoutesByFullPath {
   '/cliente/comprar': typeof ClienteComprarRoute
   '/cliente/proxies': typeof ClienteProxiesRoute
   '/cliente/': typeof ClienteIndexRoute
+  '/api/proxy/purchase': typeof ApiProxyPurchaseRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -77,6 +84,7 @@ export interface FileRoutesByTo {
   '/cliente/comprar': typeof ClienteComprarRoute
   '/cliente/proxies': typeof ClienteProxiesRoute
   '/cliente': typeof ClienteIndexRoute
+  '/api/proxy/purchase': typeof ApiProxyPurchaseRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -88,6 +96,7 @@ export interface FileRoutesById {
   '/cliente/comprar': typeof ClienteComprarRoute
   '/cliente/proxies': typeof ClienteProxiesRoute
   '/cliente/': typeof ClienteIndexRoute
+  '/api/proxy/purchase': typeof ApiProxyPurchaseRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -100,6 +109,7 @@ export interface FileRouteTypes {
     | '/cliente/comprar'
     | '/cliente/proxies'
     | '/cliente/'
+    | '/api/proxy/purchase'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -109,6 +119,7 @@ export interface FileRouteTypes {
     | '/cliente/comprar'
     | '/cliente/proxies'
     | '/cliente'
+    | '/api/proxy/purchase'
   id:
     | '__root__'
     | '/'
@@ -119,6 +130,7 @@ export interface FileRouteTypes {
     | '/cliente/comprar'
     | '/cliente/proxies'
     | '/cliente/'
+    | '/api/proxy/purchase'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -127,6 +139,7 @@ export interface RootRouteChildren {
   CriarContaRoute: typeof CriarContaRoute
   EntrarRoute: typeof EntrarRoute
   RevendaRoute: typeof RevendaRoute
+  ApiProxyPurchaseRoute: typeof ApiProxyPurchaseRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -187,6 +200,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ClienteProxiesRouteImport
       parentRoute: typeof ClienteRoute
     }
+    '/api/proxy/purchase': {
+      id: '/api/proxy/purchase'
+      path: '/api/proxy/purchase'
+      fullPath: '/api/proxy/purchase'
+      preLoaderRoute: typeof ApiProxyPurchaseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -211,6 +231,7 @@ const rootRouteChildren: RootRouteChildren = {
   CriarContaRoute: CriarContaRoute,
   EntrarRoute: EntrarRoute,
   RevendaRoute: RevendaRoute,
+  ApiProxyPurchaseRoute: ApiProxyPurchaseRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

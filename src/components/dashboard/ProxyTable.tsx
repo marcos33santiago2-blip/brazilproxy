@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { Eye, EyeOff, Loader2, RefreshCw, RotateCw, Search, Wifi } from "lucide-react";
 import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -157,8 +158,17 @@ export function ProxyTable({ limit, compact }: { limit?: number; compact?: boole
             ))}
             {rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="py-12 text-center text-sm text-muted-foreground">
-                  Nenhum proxy encontrado com esses filtros.
+                <TableCell colSpan={8} className="py-12 text-center">
+                  {proxies.length === 0 ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <p className="text-sm font-semibold text-foreground">Nenhum proxy ativo</p>
+                      <Button variant="brand" size="sm" asChild>
+                        <Link to="/cliente/comprar">Comprar agora</Link>
+                      </Button>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">Nenhum proxy encontrado com esses filtros.</span>
+                  )}
                 </TableCell>
               </TableRow>
             )}

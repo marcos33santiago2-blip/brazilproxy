@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Briefcase, LayoutDashboard, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,9 +8,6 @@ import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/brand/Logo";
 import { panelForRole, signInWithGoogle, signInWithPassword, signUpWithPassword } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-
-const demoClass =
-  "flex flex-col items-center gap-1.5 rounded-xl border bg-card p-3 text-xs font-semibold shadow-soft transition-all hover:-translate-y-0.5 hover:border-primary/40";
 
 export function AuthScreen({ mode }: { mode: "entrar" | "cadastro" }) {
   const navigate = useNavigate();
@@ -82,7 +78,7 @@ export function AuthScreen({ mode }: { mode: "entrar" | "cadastro" }) {
           </div>
         </div>
       </div>
-      <div className="flex items-center justify-center bg-surface p-6 pb-24">
+      <div className={cn("flex items-center justify-center bg-surface p-6", mode === "cadastro" && "pb-24")}>
         <div className="w-full max-w-sm">
           <Logo className="mb-8 lg:hidden" />
           <div className="flex rounded-xl bg-muted p-1">
@@ -99,58 +95,46 @@ export function AuthScreen({ mode }: { mode: "entrar" | "cadastro" }) {
               Criar conta
             </Link>
           </div>
-          <form className="mt-6 space-y-4" onSubmit={(event) => void onSubmit(event)}>
-            {mode === "cadastro" && (
-              <div className="space-y-1.5">
-                <Label htmlFor="nome">Nome completo</Label>
-                <Input id="nome" name="nome" required autoComplete="name" placeholder="Seu nome" className="h-11 bg-card" />
-              </div>
-            )}
-            <div className="space-y-1.5">
-              <Label htmlFor="email">E-mail</Label>
-              <Input id="email" name="email" type="email" required autoComplete="email" placeholder="voce@email.com" className="h-11 bg-card" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="senha">Senha</Label>
-              <Input
-                id="senha"
-                name="senha"
-                type="password"
-                required
-                {...(mode === "cadastro" ? { minLength: 6 } : {})}
-                autoComplete={mode === "cadastro" ? "new-password" : "current-password"}
-                placeholder="••••••••"
-                className="h-11 bg-card"
-              />
-            </div>
-            <Button variant="brand" size="xl" type="submit" className="w-full" disabled={pending}>
-              {pending ? "Aguarde…" : mode === "entrar" ? "Entrar" : "Criar minha conta"}
+          <div className="mt-6">
+            <Button type="button" variant="outline" size="xl" className="w-full bg-card" disabled={pending} onClick={() => void onGoogle()}>
+              <GoogleMark /> Continuar com Google
             </Button>
-          </form>
-          <div className="relative my-5">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
+            <div className="relative my-5" role="separator" aria-label="ou">
+              <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase tracking-wider">
+                <span className="bg-surface px-3 text-muted-foreground">ou</span>
+              </div>
             </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-surface px-2 text-muted-foreground">ou</span>
-            </div>
-          </div>
-          <Button type="button" variant="outline" size="xl" className="w-full bg-card" disabled={pending} onClick={() => void onGoogle()}>
-            <GoogleMark /> Continuar com Google
-          </Button>
-          <div className="mt-8">
-            <div className="mb-3 text-center text-xs font-medium uppercase tracking-wider text-muted-foreground">Ou acesse a demonstração como</div>
-            <div className="grid grid-cols-3 gap-2">
-              <Link to="/cliente" className={demoClass}>
-                <LayoutDashboard className="size-4 text-primary" /> Cliente
-              </Link>
-              <a href="/revendedor" className={demoClass}>
-                <Briefcase className="size-4 text-primary" /> Revendedor
-              </a>
-              <a href="/admin" className={demoClass}>
-                <Shield className="size-4 text-primary" /> Admin
-              </a>
-            </div>
+            <form className="space-y-4" onSubmit={(event) => void onSubmit(event)}>
+              {mode === "cadastro" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="nome">Nome completo</Label>
+                  <Input id="nome" name="nome" required autoComplete="name" placeholder="Seu nome" className="h-11 bg-card" />
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label htmlFor="email">E-mail</Label>
+                <Input id="email" name="email" type="email" required autoComplete="email" placeholder="voce@email.com" className="h-11 bg-card" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="senha">Senha</Label>
+                <Input
+                  id="senha"
+                  name="senha"
+                  type="password"
+                  required
+                  {...(mode === "cadastro" ? { minLength: 6 } : {})}
+                  autoComplete={mode === "cadastro" ? "new-password" : "current-password"}
+                  placeholder="••••••••"
+                  className="h-11 bg-card"
+                />
+              </div>
+              <Button variant="brand" size="xl" type="submit" className="w-full" disabled={pending}>
+                {pending ? "Aguarde…" : mode === "entrar" ? "Entrar" : "Criar minha conta"}
+              </Button>
+            </form>
           </div>
         </div>
       </div>

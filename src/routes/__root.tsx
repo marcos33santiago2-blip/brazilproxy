@@ -15,7 +15,6 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { BRAND } from "@/config/brand";
 import { CurrencyProvider } from "@/lib/currency";
 import { Toaster } from "@/components/ui/sonner";
-import { ViewSwitcher } from "@/components/brand/ViewSwitcher";
 
 function NotFoundComponent() {
   return (
@@ -133,7 +132,6 @@ function RootComponent() {
       <CurrencyProvider>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />
-        <ViewSwitcher />
         <Toaster position="top-right" richColors />
       </CurrencyProvider>
     </QueryClientProvider>

@@ -7,6 +7,14 @@ import { syncProfileFromSession } from "@/lib/auth";
 import type { LedgerEntry, Proxy } from "@/lib/mock-data";
 import type { Profile } from "@/types/database";
 
+const EMPTY_PROFILE: Profile = {
+  id: "",
+  full_name: "",
+  email: "",
+  role: "client",
+  balance: 0,
+};
+
 type ClientStore = {
   profile: Profile;
   balance: number;
@@ -15,6 +23,10 @@ type ClientStore = {
   proxies: Proxy[];
   setProxies: (fn: (p: Proxy[]) => Proxy[]) => void;
   transactions: LedgerEntry[];
+  /** Drops local purchase overrides so the next read comes from Supabase. */
+  syncFromServer: () => void;
+  /** True after the browser has loaded the signed-in profile, proxies and transactions. */
+  ready: boolean;
   pixOpen: boolean;
   setPixOpen: (o: boolean) => void;
 };
@@ -23,7 +35,8 @@ const Ctx = createContext<ClientStore | null>(null);
 
 export function ClientStoreProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const { data: profile } = useProfile();
+  const profileQuery = useProfile();
+  const profile = profileQuery.data ?? EMPTY_PROFILE;
 
   useEffect(() => {
     let cancelled = false;
@@ -34,8 +47,11 @@ export function ClientStoreProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [queryClient]);
-  const { data: remoteProxies } = useActiveProxies();
-  const { data: remoteTransactions } = useTransactions();
+  const proxyQuery = useActiveProxies();
+  const txQuery = useTransactions();
+  const remoteProxies = proxyQuery.data ?? [];
+  const remoteTransactions = txQuery.data ?? [];
+  const ready = profileQuery.isFetchedAfterMount && proxyQuery.isFetchedAfterMount && txQuery.isFetchedAfterMount;
 
   const [balanceOverride, setBalanceOverride] = useState<number | null>(null);
   const [proxyOverride, setProxyOverride] = useState<Proxy[] | null>(null);
@@ -77,6 +93,12 @@ export function ClientStoreProvider({ children }: { children: ReactNode }) {
     setProxyOverride(fn(proxiesRef.current));
   };
 
+  const syncFromServer = () => {
+    setBalanceOverride(null);
+    setProxyOverride(null);
+    setTxOverride(null);
+  };
+
   return (
     <Ctx.Provider
       value={{
@@ -87,6 +109,8 @@ export function ClientStoreProvider({ children }: { children: ReactNode }) {
         proxies,
         setProxies,
         transactions,
+        syncFromServer,
+        ready,
         pixOpen,
         setPixOpen,
       }}

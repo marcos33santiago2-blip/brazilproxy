@@ -14,7 +14,7 @@ const credentials = configuredCredentials();
 
 if (!credentials && import.meta.env.MODE !== "test") {
   console.warn(
-    "[brazilproxy] VITE_SUPABASE_URL ou VITE_SUPABASE_ANON_KEY ausente. Painéis usam dados de demonstração.",
+    "[brazilproxy] VITE_SUPABASE_URL ou VITE_SUPABASE_ANON_KEY ausente. O painel do cliente fica sem dados até o Supabase ser configurado.",
   );
 }
 
@@ -38,7 +38,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-/** Browser session only. SSR and a missing client resolve to null so the demo data stays stable. */
+/** Browser session only. SSR and a missing client resolve to null. */
 export async function currentSessionUser(): Promise<SessionUser | null> {
   if (!supabase || import.meta.env.SSR) return null;
   try {
@@ -63,9 +63,12 @@ export async function selectOwnRows(
   table: "proxies" | "transactions",
   columns: string,
   userId: string,
+  orderBy?: "created_at",
 ): Promise<{ rows: unknown[]; errorMessage: string | null }> {
   if (!supabase) return { rows: [], errorMessage: "Supabase não configurado" };
-  const { data, error } = await supabase.from(table).select(columns).eq("user_id", userId);
+  const filtered = supabase.from(table).select(columns).eq("user_id", userId);
+  const query = orderBy ? filtered.order(orderBy, { ascending: false, nullsFirst: false }) : filtered;
+  const { data, error } = await query;
   if (error) return { rows: [], errorMessage: error.message };
   return { rows: Array.isArray(data) ? data : [], errorMessage: null };
 }

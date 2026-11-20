@@ -40,9 +40,12 @@ function ClienteLayout() {
 }
 
 function Shell() {
-  const { balance, setPixOpen, pixOpen, addBalance, profile, proxies } = useClientStore();
+  const { balance, setPixOpen, pixOpen, addBalance, profile, proxies, ready } = useClientStore();
   const { format } = useCurrency();
-  const nav = NAV.map((item) => (item.to === "/cliente/proxies" ? { ...item, badge: String(proxies.length) } : item));
+  const activeProxies = proxies.filter((proxy) => proxy.status === "online").length;
+  const nav = NAV.map((item) =>
+    item.to === "/cliente/proxies" && ready && activeProxies > 0 ? { ...item, badge: String(activeProxies) } : item,
+  );
   return (
     <DashboardShell
       area="Área do Cliente"

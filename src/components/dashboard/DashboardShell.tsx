@@ -117,7 +117,7 @@ export function DashboardShell({
             </div>
           </div>
         </header>
-        <main className="mx-auto max-w-7xl px-4 pb-28 pt-6 sm:px-6 lg:pt-8">{children}</main>
+        <main className="mx-auto max-w-7xl px-4 pb-10 pt-6 sm:px-6 lg:pt-8">{children}</main>
       </div>
     </div>
   );

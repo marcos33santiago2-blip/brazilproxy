@@ -72,6 +72,19 @@ export function quote(typeId: ProxyTypeId, countryCode: string, qty: number) {
   return { unit, subtotal, discountRate, discount, total: round2(subtotal - discount) };
 }
 
+/** Same total the buy screen charges: IP plans bill per month, with 10% off on 90 days. */
+export function orderTotal(typeId: ProxyTypeId, countryCode: string, qty: number, period: "30" | "90"): number {
+  const type = getProxyType(typeId);
+  const priced = quote(typeId, countryCode, qty);
+  const months = period === "90" ? 3 : 1;
+  const factor = type.unit === "IP" ? months * (months === 3 ? 0.9 : 1) : 1;
+  return round2(priced.total * factor);
+}
+
+export function isProxyTypeId(value: string): value is ProxyTypeId {
+  return PROXY_TYPES.some((type) => type.id === value);
+}
+
 /** Reseller levels: wholesale discount over retail price. Max is 60%. */
 export const RESELLER_LEVELS = [
   { id: "bronze", name: "Bronze", discount: 0.3, minMonthly: 0 },

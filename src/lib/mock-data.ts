@@ -25,41 +25,16 @@ export type Proxy = {
   expires: string;
   daysLeft: number;
   status: ProxyStatus;
+  /** Consumed gigabytes from `proxies.gb_used`. */
+  gbUsed?: number;
+  /** ISO timestamp from `proxies.expires_at`. Absent when the proxy has no expiry. */
+  expiresAt?: string | null;
 };
-
-const LOCS = [
-  { country: "Brasil", flag: "🇧🇷", cities: ["São Paulo", "Rio de Janeiro", "Belo Horizonte", "Curitiba", "Porto Alegre", "Recife"] },
-  { country: "Estados Unidos", flag: "🇺🇸", cities: ["Nova York", "Miami", "Dallas", "Los Angeles"] },
-  { country: "Alemanha", flag: "🇩🇪", cities: ["Frankfurt", "Berlim"] },
-  { country: "Reino Unido", flag: "🇬🇧", cities: ["Londres", "Manchester"] },
-  { country: "Portugal", flag: "🇵🇹", cities: ["Lisboa", "Porto"] },
-] as const;
 
 const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export const randomPass = (len = 12, r = rnd) => Array.from({ length: len }, () => chars[Math.floor(r() * chars.length)]).join("");
 export const randomIp = (r = Math.random) =>
   `${[177, 186, 189, 191, 200, 201][Math.floor(r() * 6)]}.${Math.floor(r() * 255)}.${Math.floor(r() * 255)}.${1 + Math.floor(r() * 253)}`;
-
-export const PROXIES: Proxy[] = Array.from({ length: 14 }, (_, i) => {
-  const loc = i < 8 ? LOCS[0] : pick(LOCS);
-  const days = int(1, 30);
-  const d = new Date(Date.UTC(2026, 10, 19 + days));
-  return {
-    id: `px_${1000 + i}`,
-    ip: randomIp(rnd),
-    port: pick([8000, 8080, 1080, 3128, 9050, 10000 + i]),
-    user: `bp_user${int(100, 999)}`,
-    pass: randomPass(12),
-    protocol: i % 3 === 0 ? "SOCKS5" : "HTTP",
-    type: pick(["ISP Estático", "Residencial", "Móvel 4G", "DC IPv4"]),
-    country: loc.country,
-    flag: loc.flag,
-    city: pick(loc.cities),
-    expires: d.toLocaleDateString("pt-BR", { timeZone: "UTC" }),
-    daysLeft: days,
-    status: i === 5 ? "instavel" : i === 11 ? "offline" : "online",
-  };
-});
 
 export type LedgerEntry = {
   id: string;
@@ -68,20 +43,6 @@ export type LedgerEntry = {
   amount: number;
   type: "credito" | "debito";
 };
-
-export const TRANSACTIONS: LedgerEntry[] = [
-  { id: "#PX-48211", date: "19/11/2026 08:42", desc: "Recarga via Pix", amount: 250, type: "credito" as const },
-  { id: "#PX-48190", date: "18/11/2026 22:10", desc: "10x ISP Estático · Brasil", amount: -149, type: "debito" as const },
-  { id: "#PX-48122", date: "17/11/2026 14:05", desc: "5 GB Residencial · EUA", amount: -85.05, type: "debito" as const },
-  { id: "#PX-48010", date: "15/11/2026 09:31", desc: "Recarga via Pix", amount: 500, type: "credito" as const },
-  { id: "#PX-47888", date: "12/11/2026 19:47", desc: "Renovação 3x Móvel 4G", amount: -119.7, type: "debito" as const },
-];
-
-export const USAGE_30D = Array.from({ length: 30 }, (_, i) => ({
-  day: `${((i + 20) % 30) + 1}/${i < 10 ? "10" : "11"}`,
-  gb: Math.round((2 + rnd() * 6 + (i > 20 ? 3 : 0)) * 10) / 10,
-  req: int(18000, 52000),
-}));
 
 export const REVENUE_12M = ["Dez", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov"].map((m, i) => ({
   month: m,

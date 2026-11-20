@@ -10,7 +10,10 @@ export interface Profile {
   balance: number;
 }
 
-/** Row shape of `proxies`. UI-only fields stay optional so a core table still loads. */
+/**
+ * Row shape of `proxies`. UI-only fields stay optional so a core table still loads.
+ * Daily traffic is not a separate table: consumption lives on `gb_used`.
+ */
 export interface ProxyRecord {
   id: string;
   user_id: string;

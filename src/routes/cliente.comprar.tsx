@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { QrCode, Wallet } from "lucide-react";
 import { toast } from "sonner";
@@ -10,14 +11,15 @@ import { PixDialog } from "@/components/brand/PixDialog";
 import { Segmented } from "@/components/dashboard/ProxyTable";
 import { useClientStore } from "@/lib/client-store";
 import { useCurrency } from "@/lib/currency";
-import { COUNTRIES, PROXY_TYPES, getCountry, getProxyType, quote, type ProxyTypeId } from "@/lib/pricing";
-import { randomIp, randomPass } from "@/lib/mock-data";
+import { COUNTRIES, PROXY_TYPES, getCountry, getProxyType, orderTotal, quote, type ProxyTypeId } from "@/lib/pricing";
+import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/cliente/comprar")({ component: BuyPage });
 
 function BuyPage() {
-  const { balance, spend, setProxies, setPixOpen, addBalance } = useClientStore();
+  const { balance, profile, setPixOpen, syncFromServer } = useClientStore();
+  const queryClient = useQueryClient();
   const { format } = useCurrency();
   const navigate = useNavigate();
   const [typeId, setTypeId] = useState<ProxyTypeId>("isp");
@@ -26,34 +28,81 @@ function BuyPage() {
   const [protocol, setProtocol] = useState<"HTTP" | "SOCKS5">("HTTP");
   const [period, setPeriod] = useState<"30" | "90">("30");
   const [pix, setPix] = useState(false);
+  const [provisioning, setProvisioning] = useState(false);
   const type = getProxyType(typeId);
   const months = period === "90" ? 3 : 1;
   const q = quote(typeId, country, qty);
-  const total = Math.round(q.total * (type.unit === "IP" ? months * (months === 3 ? 0.9 : 1) : 1) * 100) / 100;
+  const total = orderTotal(typeId, country, qty, period);
   const c = getCountry(country);
 
-  const deliver = () => {
-    const n = type.unit === "IP" ? Math.min(qty, 50) : 1;
-    setProxies((all) => [
-      ...Array.from({ length: n }, (_, i) => ({
-        id: `px_new_${Date.now()}_${i}`,
-        ip: randomIp(),
-        port: type.unit === "GB" ? 10000 : 8080,
-        user: `bp_user${Math.floor(Math.random() * 900 + 100)}`,
-        pass: randomPass(12, Math.random),
-        protocol,
-        type: type.short,
-        country: c.name,
-        flag: c.flag,
-        city: c.code === "BR" ? "São Paulo" : c.name,
-        expires: "em " + (type.unit === "IP" ? Number(period) : 30) + " dias",
-        daysLeft: type.unit === "IP" ? Number(period) : 30,
-        status: "online" as const,
-      })),
-      ...all,
-    ]);
-    toast.success(`${qty} ${type.unit === "GB" ? "GB" : "IPs"} ${type.name} ativados!`);
-    navigate({ to: "/cliente/proxies" });
+  const purchase = async () => {
+    if (provisioning) return;
+    if (!profile.id) {
+      toast.error("Entre na sua conta para comprar.");
+      return;
+    }
+    if (balance < total) {
+      toast.error("Saldo insuficiente", {
+        description: "Adicione saldo para concluir a compra.",
+        action: { label: "Adicionar saldo", onClick: () => setPixOpen(true) },
+      });
+      return;
+    }
+    if (!supabase) {
+      toast.error("Supabase não está configurado neste ambiente.");
+      return;
+    }
+    const session = await supabase.auth.getSession();
+    const token = session.data.session?.access_token;
+    if (!token) {
+      toast.error("Sessão expirada. Entre novamente.");
+      return;
+    }
+    setProvisioning(true);
+    try {
+      const response = await fetch("/api/proxy/purchase", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userId: profile.id,
+          serviceId: typeId,
+          planId: period,
+          quantity: qty,
+          country,
+          priceBrl: total,
+          protocol,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as { success?: boolean; error?: string; proxy?: { connection?: string } } | null;
+      if (!response.ok || !payload?.success) {
+        const message = payload?.error || "Não foi possível provisionar o proxy.";
+        if (response.status === 400 && message.toLowerCase().includes("saldo")) {
+          toast.error("Saldo insuficiente", {
+            description: "Adicione saldo para concluir a compra.",
+            action: { label: "Adicionar saldo", onClick: () => setPixOpen(true) },
+          });
+        } else {
+          toast.error(message);
+        }
+        return;
+      }
+      syncFromServer();
+      await queryClient.invalidateQueries({ queryKey: ["profile"] });
+      await queryClient.invalidateQueries({ queryKey: ["proxies"] });
+      await queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      toast.success("Proxy provisionado.", {
+        description: payload.proxy?.connection ? `Credenciais: ${payload.proxy.connection}` : "Ele já está em Meus Proxies.",
+      });
+      await navigate({ to: "/cliente/proxies" });
+    } catch (error) {
+      console.warn("[brazilproxy] Falha ao comprar proxy.", error);
+      toast.error("Não foi possível provisionar o proxy.");
+    } finally {
+      setProvisioning(false);
+    }
   };
 
   return (
@@ -130,16 +179,8 @@ function BuyPage() {
               Seu saldo: <span className="font-mono font-semibold text-foreground">{format(balance)}</span>
               {balance < total && <span className="text-amber-foreground"> · faltam {format(total - balance)}</span>}
             </div>
-            <Button
-              variant="brand"
-              size="xl"
-              className="w-full"
-              onClick={() => {
-                if (spend(total)) deliver();
-                else toast.error("Saldo insuficiente", { action: { label: "Adicionar saldo", onClick: () => setPixOpen(true) } });
-              }}
-            >
-              <Wallet /> Pagar com saldo
+            <Button variant="brand" size="xl" className="w-full" disabled={provisioning} onClick={() => void purchase()}>
+              <Wallet /> {provisioning ? "A provisionar proxy..." : "Pagar com saldo"}
             </Button>
             <Button variant="outline" size="xl" className="w-full" onClick={() => setPix(true)}>
               <QrCode /> Pagar direto via Pix
@@ -152,10 +193,10 @@ function BuyPage() {
         onOpenChange={setPix}
         amount={total}
         description={`${qty} ${type.unit === "GB" ? "GB" : "IPs"} ${type.name} · ${c.name}`}
-        onPaid={(n) => {
-          addBalance(n);
-          spend(n);
-          setTimeout(deliver, 600);
+        onPaid={() => {
+          toast.message("Pagamento Pix ainda não credita o saldo.", {
+            description: "Provisione o proxy com Pagar com saldo depois que o saldo estiver na conta.",
+          });
         }}
       />
     </>

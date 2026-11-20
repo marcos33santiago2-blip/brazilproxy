@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isExpiringWithin,
   mapProxyRecord,
   mapTransaction,
   parseProfile,
@@ -63,7 +64,24 @@ describe("mapProxyRecord", () => {
       city: "Recife",
       daysLeft: 0,
       expires: "—",
+      gbUsed: 1,
+      expiresAt: null,
     });
+  });
+});
+
+describe("isExpiringWithin", () => {
+  const now = Date.parse("2026-11-20T12:00:00.000Z");
+
+  it("ignores proxies without an expiry date", () => {
+    expect(isExpiringWithin(null, 5, now)).toBe(false);
+    expect(isExpiringWithin(undefined, 5, now)).toBe(false);
+  });
+
+  it("counts only dates inside the next five days", () => {
+    expect(isExpiringWithin("2026-11-23T12:00:00.000Z", 5, now)).toBe(true);
+    expect(isExpiringWithin("2026-11-26T12:00:00.000Z", 5, now)).toBe(false);
+    expect(isExpiringWithin("2026-11-19T12:00:00.000Z", 5, now)).toBe(false);
   });
 });
 

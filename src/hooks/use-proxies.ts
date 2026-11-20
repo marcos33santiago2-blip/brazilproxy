@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { mapProxyRecord, parseProxyRecord } from "@/lib/map-proxy";
-import { PROXIES, type Proxy } from "@/lib/mock-data";
+import type { Proxy } from "@/lib/mock-data";
 import { currentSessionUser, selectOwnRows } from "@/lib/supabase";
 
 const FULL_COLUMNS =
@@ -9,13 +9,13 @@ const CORE_COLUMNS = "id, user_id, host, port, username, password, gb_limit, gb_
 
 export async function fetchActiveProxies(): Promise<Proxy[]> {
   const sessionUser = await currentSessionUser();
-  if (!sessionUser) return PROXIES;
+  if (!sessionUser) return [];
 
   let result = await selectOwnRows("proxies", FULL_COLUMNS, sessionUser.id);
   if (result.errorMessage) result = await selectOwnRows("proxies", CORE_COLUMNS, sessionUser.id);
   if (result.errorMessage) {
     console.warn("[brazilproxy] proxies:", result.errorMessage);
-    return PROXIES;
+    return [];
   }
 
   const mapped: Proxy[] = [];
@@ -30,7 +30,6 @@ export function useActiveProxies() {
   return useQuery({
     queryKey: ["proxies"],
     queryFn: fetchActiveProxies,
-    initialData: PROXIES,
     refetchOnWindowFocus: false,
   });
 }

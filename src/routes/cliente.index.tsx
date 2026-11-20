@@ -1,29 +1,36 @@
+import type { ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Activity, ArrowDownLeft, ArrowRight, ArrowUpRight, CalendarClock, Network, Plus, Wallet } from "lucide-react";
 import { PageHeader, Panel, StatCard } from "@/components/dashboard/DashboardShell";
-import { AreaTrend } from "@/components/dashboard/Charts";
 import { ProxyTable } from "@/components/dashboard/ProxyTable";
 import { Button } from "@/components/ui/button";
 import { useClientStore } from "@/lib/client-store";
 import { useCurrency } from "@/lib/currency";
-import { USAGE_30D } from "@/lib/mock-data";
+import { isExpiringWithin } from "@/lib/map-proxy";
 import { cn } from "@/lib/utils";
+
+function formatGb(value: number) {
+  if (value <= 0) return "0 GB";
+  const rounded = Math.round(value * 10) / 10;
+  return `${rounded.toLocaleString("pt-BR")} GB`;
+}
 
 export const Route = createFileRoute("/cliente/")({ component: Overview });
 
 function Overview() {
-  const { balance, proxies, transactions, setPixOpen, profile } = useClientStore();
+  const { balance, proxies, transactions, setPixOpen, profile, ready } = useClientStore();
   const { format } = useCurrency();
-  const firstName = profile.full_name.split(" ")[0] ?? profile.full_name;
+  const firstName = profile.full_name.trim().split(/\s+/)[0] ?? "";
   const online = proxies.filter((p) => p.status === "online").length;
-  const expiring = proxies.filter((p) => p.daysLeft <= 5).length;
-  const totalGb = USAGE_30D.reduce((s, d) => s + d.gb, 0);
+  const expiring = proxies.filter((p) => isExpiringWithin(p.expiresAt, 5)).length;
+  const totalGb = proxies.reduce((sum, proxy) => sum + (proxy.gbUsed ?? 0), 0);
+  const recent = transactions.slice(0, 6);
 
   return (
     <>
       <PageHeader
-        title={`Olá, ${firstName} 👋`}
-        description="Aqui está um resumo da sua operação nos últimos 30 dias."
+        title={firstName ? `Olá, ${firstName}` : "Olá"}
+        description="Aqui está um resumo da sua conta."
         actions={
           <>
             <Button variant="outline" onClick={() => setPixOpen(true)}>
@@ -38,17 +45,49 @@ function Overview() {
         }
       />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Saldo disponível" value={format(balance)} icon={Wallet} hint="Recarga instantânea via Pix" />
-        <StatCard label="Proxies ativos" value={`${online}/${proxies.length}`} icon={Network} tone="cyan" hint="online agora" />
-        <StatCard label="Tráfego (30 dias)" value={`${totalGb.toFixed(1)} GB`} icon={Activity} tone="success" trend={12} hint="vs. mês anterior" />
-        <StatCard label="Expirando em 5 dias" value={expiring} icon={CalendarClock} tone="amber" hint="renove para não perder o IP" />
+        <StatCard
+          label="Saldo disponível"
+          value={ready ? format(balance) : "—"}
+          icon={Wallet}
+          hint={ready ? "Recarga instantânea via Pix" : "Carregando saldo"}
+        />
+        <StatCard
+          label="Proxies ativos"
+          value={ready ? `${online}/${proxies.length}` : "—"}
+          icon={Network}
+          tone="cyan"
+          hint={ready ? (proxies.length === 0 ? "Nenhum proxy ativo" : "online agora") : "Carregando proxies"}
+        />
+        <StatCard
+          label="Tráfego (30 dias)"
+          value={ready ? formatGb(totalGb) : "—"}
+          icon={Activity}
+          tone="success"
+          hint={ready ? (totalGb <= 0 ? "Nenhum tráfego registrado" : "consumo acumulado") : "Carregando tráfego"}
+        />
+        <StatCard
+          label="Expirando em 5 dias"
+          value={ready ? expiring : "—"}
+          icon={CalendarClock}
+          tone="amber"
+          hint={ready ? (expiring === 0 ? "Nenhum proxy perto do vencimento" : "renove para não perder o IP") : "Carregando vencimentos"}
+        />
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.6fr_1fr]">
-        <Panel title="Consumo de tráfego" description="GB trafegados por dia">
-          <div className="p-4">
-            <AreaTrend data={USAGE_30D} x="day" series={[{ key: "gb", label: "GB", color: "var(--primary)" }]} format={(v) => `${v}`} />
-          </div>
+        <Panel title="Consumo de tráfego" description="Últimos 30 dias">
+          {!ready ? (
+            <EmptyPanel title="Carregando consumo…" />
+          ) : totalGb <= 0 ? (
+            <EmptyPanel title="Nenhum tráfego registrado nos últimos 30 dias" />
+          ) : (
+            <div className="flex min-h-64 flex-col items-center justify-center gap-2 px-6 py-16 text-center">
+              <p className="font-display text-4xl font-extrabold">{formatGb(totalGb)}</p>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                Consumo acumulado dos seus proxies. Ainda não há histórico diário para montar a série dos últimos 30 dias.
+              </p>
+            </div>
+          )}
         </Panel>
         <Panel
           title="Últimas transações"
@@ -58,25 +97,39 @@ function Overview() {
             </Button>
           }
         >
-          <ul className="divide-y">
-            {transactions.slice(0, 6).map((t) => (
-              <li key={t.id} className="flex items-center gap-3 px-5 py-3">
-                <span className={cn("grid size-8 place-items-center rounded-lg", t.type === "credito" ? "bg-success-soft text-success" : "bg-muted text-muted-foreground")}>
-                  {t.type === "credito" ? <ArrowDownLeft className="size-4" /> : <ArrowUpRight className="size-4" />}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{t.desc}</div>
-                  <div className="font-mono text-[11px] text-muted-foreground">
-                    {t.id} · {t.date}
+          {!ready ? (
+            <EmptyPanel title="Carregando transações…" />
+          ) : recent.length === 0 ? (
+            <EmptyPanel
+              title="Nenhuma transação encontrada"
+              description="Recargas e compras da sua conta aparecem aqui."
+              action={
+                <Button variant="outline" size="sm" onClick={() => setPixOpen(true)}>
+                  Adicionar saldo
+                </Button>
+              }
+            />
+          ) : (
+            <ul className="divide-y">
+              {recent.map((t) => (
+                <li key={t.id} className="flex items-center gap-3 px-5 py-3">
+                  <span className={cn("grid size-8 place-items-center rounded-lg", t.type === "credito" ? "bg-success-soft text-success" : "bg-muted text-muted-foreground")}>
+                    {t.type === "credito" ? <ArrowDownLeft className="size-4" /> : <ArrowUpRight className="size-4" />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">{t.desc}</div>
+                    <div className="font-mono text-[11px] text-muted-foreground">
+                      {t.id} · {t.date}
+                    </div>
                   </div>
-                </div>
-                <span className={cn("font-mono text-sm font-semibold", t.amount > 0 && "text-success")}>
-                  {t.amount > 0 ? "+" : "−"}
-                  {format(Math.abs(t.amount))}
-                </span>
-              </li>
-            ))}
-          </ul>
+                  <span className={cn("font-mono text-sm font-semibold", t.amount > 0 && "text-success")}>
+                    {t.amount > 0 ? "+" : "−"}
+                    {format(Math.abs(t.amount))}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </Panel>
       </div>
 
@@ -84,15 +137,40 @@ function Overview() {
         className="mt-6"
         title="Proxies recentes"
         actions={
-          <Button variant="ghost" size="sm" asChild>
-            <Link to="/cliente/proxies">
-              Ver todos <ArrowRight />
-            </Link>
-          </Button>
+          ready && proxies.length > 0 ? (
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/cliente/proxies">
+                Ver todos <ArrowRight />
+              </Link>
+            </Button>
+          ) : null
         }
       >
-        <ProxyTable limit={5} compact />
+        {!ready ? (
+          <EmptyPanel title="Carregando proxies…" />
+        ) : proxies.length === 0 ? (
+          <EmptyPanel
+            title="Você ainda não possui proxies ativos"
+            action={
+              <Button variant="brand" size="sm" asChild>
+                <Link to="/cliente/comprar">Comprar agora</Link>
+              </Button>
+            }
+          />
+        ) : (
+          <ProxyTable limit={5} compact />
+        )}
       </Panel>
     </>
+  );
+}
+
+function EmptyPanel({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+      <p className="text-sm font-semibold text-foreground">{title}</p>
+      {description ? <p className="max-w-xs text-sm text-muted-foreground">{description}</p> : null}
+      {action}
+    </div>
   );
 }
