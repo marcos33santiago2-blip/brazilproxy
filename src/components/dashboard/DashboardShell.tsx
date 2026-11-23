@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate, type LinkProps } from "@tanstack/react-router";
+import { Link, type LinkProps } from "@tanstack/react-router";
 import { Bell, LogOut, Menu, Search, type LucideIcon } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -46,14 +46,13 @@ function SidebarContent({ area, nav, footer, onNavigate }: { area: string; nav: 
 }
 
 function SignOutButton() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   return (
     <button
       type="button"
       className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-night-muted hover:bg-sidebar-accent hover:text-sidebar-foreground"
       onClick={() => {
-        void clearSession(queryClient).then(() => navigate({ to: "/entrar" }));
+        void clearSession(queryClient);
       }}
     >
       <LogOut className="size-4" /> Sair

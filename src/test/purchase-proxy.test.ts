@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { orderTotal } from "@/lib/pricing";
-import { buildMockConnections, catalogPrice, expiryFromPlan, parsePurchaseBody } from "@/server/purchase-proxy";
+import { mapRpcError, parseLedgerResult } from "@/server/purchase-ledger";
+import {
+  buildMockConnections,
+  catalogPrice,
+  expiryFromPlan,
+  normalizeIdempotencyKey,
+  parsePurchaseBody,
+  purchaseAction,
+  shouldRefundAfterUpstreamFailure,
+} from "@/server/purchase-proxy";
 
 const body = {
   userId: "user-1",
@@ -35,5 +44,73 @@ describe("purchase request", () => {
     const now = Date.parse("2026-11-20T12:00:00.000Z");
     expect(expiryFromPlan("30", now)).toBe("2026-12-20T12:00:00.000Z");
     expect(expiryFromPlan("90", now)).toBe("2027-02-18T12:00:00.000Z");
+  });
+
+  it("accepts an idempotency key and rejects a short or spaced one", () => {
+    expect(normalizeIdempotencyKey("  order_12345678  ")).toBe("order_12345678");
+    expect(normalizeIdempotencyKey("")).toBeNull();
+    expect(normalizeIdempotencyKey("short")).toBeNull();
+    expect(normalizeIdempotencyKey("has space!!")).toBeNull();
+  });
+
+  it("refunds only when the upstream order was never issued", () => {
+    expect(shouldRefundAfterUpstreamFailure(null)).toBe(true);
+    expect(shouldRefundAfterUpstreamFailure("  ")).toBe(true);
+    expect(shouldRefundAfterUpstreamFailure("pc_100")).toBe(false);
+  });
+
+  it("does not provision again after the upstream order id is known", () => {
+    expect(purchaseAction({ status: "paid", upstreamOrderId: "pc_1", claimed: false })).toBe(
+      "return_paid",
+    );
+    expect(purchaseAction({ status: "failed", upstreamOrderId: null, claimed: true })).toBe(
+      "reject_failed",
+    );
+    expect(purchaseAction({ status: "pending", upstreamOrderId: "pc_1", claimed: true })).toBe(
+      "resume_upstream",
+    );
+    expect(purchaseAction({ status: "pending", upstreamOrderId: null, claimed: false })).toBe(
+      "wait",
+    );
+    expect(purchaseAction({ status: "pending", upstreamOrderId: null, claimed: true })).toBe(
+      "provision",
+    );
+  });
+});
+
+describe("purchase ledger", () => {
+  it("reads a paid snapshot and a balance stored as text", () => {
+    const snapshot = parseLedgerResult({
+      order_id: "order-1",
+      transaction_id: "tx-1",
+      balance: "12.50",
+      status: "paid",
+      already_exists: true,
+      upstream_order_id: "pc_9",
+      proxies: [
+        {
+          id: "px-1",
+          host: "1.2.3.4",
+          port: "8080",
+          username: "u",
+          password: "p",
+          expires_at: "2026-12-20T12:00:00.000Z",
+        },
+      ],
+    });
+    expect(snapshot).toMatchObject({
+      orderId: "order-1",
+      balance: 12.5,
+      status: "paid",
+      alreadyExists: true,
+      upstreamOrderId: "pc_9",
+    });
+    expect(snapshot?.proxies[0]).toMatchObject({ port: 8080, host: "1.2.3.4" });
+  });
+
+  it("maps an insufficient balance error to a client-visible 400", () => {
+    const error = mapRpcError({ message: "insufficient_balance" });
+    expect(error.status).toBe(400);
+    expect(error.message.toLowerCase()).toContain("saldo");
   });
 });

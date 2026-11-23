@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { BookOpen, Code2, FileDown, Headphones, LayoutGrid, Network, Plus, Wallet } from "lucide-react";
 import { DashboardShell, type NavItem } from "@/components/dashboard/DashboardShell";
@@ -40,7 +41,8 @@ function ClienteLayout() {
 }
 
 function Shell() {
-  const { balance, setPixOpen, pixOpen, addBalance, profile, proxies, ready } = useClientStore();
+  const queryClient = useQueryClient();
+  const { balance, setPixOpen, pixOpen, syncFromServer, profile, proxies, ready } = useClientStore();
   const { format } = useCurrency();
   const activeProxies = proxies.filter((proxy) => proxy.status === "online").length;
   const nav = NAV.map((item) =>
@@ -66,13 +68,21 @@ function Shell() {
           <div className="text-xs opacity-80">Saldo disponível</div>
           <div className="font-display text-xl font-extrabold">{format(balance)}</div>
           <button onClick={() => setPixOpen(true)} className="mt-3 w-full rounded-lg bg-night/25 py-1.5 text-xs font-semibold backdrop-blur hover:bg-night/40">
-            Adicionar saldo via Pix
+            Adicionar saldo
           </button>
         </div>
       }
     >
       <Outlet />
-      <PixDialog open={pixOpen} onOpenChange={setPixOpen} onPaid={addBalance} />
+      <PixDialog
+        open={pixOpen}
+        onOpenChange={setPixOpen}
+        onPaid={() => {
+          syncFromServer();
+          void queryClient.invalidateQueries({ queryKey: ["profile"] });
+          void queryClient.invalidateQueries({ queryKey: ["transactions"] });
+        }}
+      />
     </DashboardShell>
   );
 }

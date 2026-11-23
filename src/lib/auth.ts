@@ -75,11 +75,20 @@ export async function ensureProfile(user: User, fullName: string): Promise<UserR
   return "client";
 }
 
+/** Google (and e-mail confirmation) must return to the origin that is actually open, including its port. */
+export function authReturnUrl(): string {
+  return `${window.location.origin}${panelForRole("client")}`;
+}
+
+export function signedOutUrl(): string {
+  return `${window.location.origin}/entrar`;
+}
+
 export async function signInWithGoogle(): Promise<{ ok: true } | { ok: false; message: string }> {
   if (!supabase) return { ok: false, message: "O Supabase não está configurado neste ambiente." };
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: `${window.location.origin}/cliente` },
+    options: { redirectTo: authReturnUrl() },
   });
   if (error) return { ok: false, message: authErrorMessage(error.message) };
   return { ok: true };
@@ -109,7 +118,10 @@ export async function signUpWithPassword(input: { email: string; password: strin
   const { data, error } = await supabase.auth.signUp({
     email,
     password: input.password,
-    options: { data: { full_name: fullName } },
+    options: {
+      data: { full_name: fullName },
+      emailRedirectTo: authReturnUrl(),
+    },
   });
   if (error || !data.user) return { ok: false, message: authErrorMessage(error?.message ?? "") };
   if (data.user.identities?.length === 0) return { ok: false, message: "Já existe uma conta com esse e-mail." };
@@ -126,4 +138,5 @@ export async function clearSession(queryClient: QueryClient): Promise<void> {
   await queryClient.removeQueries({ queryKey: ["profile"] });
   await queryClient.removeQueries({ queryKey: ["proxies"] });
   await queryClient.removeQueries({ queryKey: ["transactions"] });
+  if (typeof window !== "undefined") window.location.assign(signedOutUrl());
 }

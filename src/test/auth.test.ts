@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { authErrorMessage, panelForRole } from "@/lib/auth";
+import { authErrorMessage, authReturnUrl, panelForRole, signedOutUrl } from "@/lib/auth";
 
 describe("authErrorMessage", () => {
   it("translates invalid credentials", () => {
@@ -16,5 +16,12 @@ describe("panelForRole", () => {
     expect(panelForRole("client")).toBe("/cliente");
     expect(panelForRole("reseller")).toBe("/cliente");
     expect(panelForRole("admin")).toBe("/cliente");
+  });
+});
+
+describe("auth redirects", () => {
+  it("returns Google and logout to the origin that is open", () => {
+    expect(authReturnUrl()).toBe(`${window.location.origin}/cliente`);
+    expect(signedOutUrl()).toBe(`${window.location.origin}/entrar`);
   });
 });

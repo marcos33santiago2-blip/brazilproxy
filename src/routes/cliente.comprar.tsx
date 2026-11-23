@@ -183,7 +183,7 @@ function BuyPage() {
               <Wallet /> {provisioning ? "A provisionar proxy..." : "Pagar com saldo"}
             </Button>
             <Button variant="outline" size="xl" className="w-full" onClick={() => setPix(true)}>
-              <QrCode /> Pagar direto via Pix
+              <QrCode /> Pagar com Pix ou cartão
             </Button>
           </div>
         </Panel>
@@ -194,9 +194,10 @@ function BuyPage() {
         amount={total}
         description={`${qty} ${type.unit === "GB" ? "GB" : "IPs"} ${type.name} · ${c.name}`}
         onPaid={() => {
-          toast.message("Pagamento Pix ainda não credita o saldo.", {
-            description: "Provisione o proxy com Pagar com saldo depois que o saldo estiver na conta.",
-          });
+          syncFromServer();
+          void queryClient.invalidateQueries({ queryKey: ["profile"] });
+          void queryClient.invalidateQueries({ queryKey: ["transactions"] });
+          toast.success("Pagamento confirmado. O saldo já pode ser usado na compra.");
         }}
       />
     </>

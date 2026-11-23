@@ -1,8 +1,23 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { getCountry, getProxyType, isProxyTypeId, orderTotal, type ProxyTypeId } from "@/lib/pricing";
-
-const PROXY_COLUMNS =
-  "id, user_id, host, port, username, password, gb_limit, gb_used, status, protocol, proxy_type, country, expires_at";
+import {
+  getCountry,
+  getProxyType,
+  isProxyTypeId,
+  orderTotal,
+  type ProxyTypeId,
+} from "@/lib/pricing";
+import {
+  claimPurchase,
+  completePurchase,
+  debitPurchase,
+  LedgerError,
+  recordUpstreamOrder,
+  refundPurchase,
+  type LedgerSnapshot,
+  type ProxyInsert,
+  type StoredProxy,
+} from "@/server/purchase-ledger";
+import { supabaseAdmin } from "@/server/supabase-admin";
 
 export type PurchaseBody = {
   userId: string;
@@ -30,8 +45,41 @@ export type ProvisionedProxy = {
 
 type Connection = { host: string; port: number; username: string; password: string };
 
+export type PurchaseAction =
+  "return_paid" | "reject_failed" | "resume_upstream" | "wait" | "provision";
+
+const IDEMPOTENCY_KEY = /^[A-Za-z0-9:_-]{8,128}$/;
+
 export function isMockMode(): boolean {
   return process.env.PROXY_CHEAP_MOCK_MODE === "true";
+}
+
+/** A repeated purchase key is accepted only when it matches this shape. Empty means the server mints one. */
+export function normalizeIdempotencyKey(raw: string | null | undefined): string | null {
+  const value = raw?.trim() ?? "";
+  if (!value) return null;
+  return IDEMPOTENCY_KEY.test(value) ? value : null;
+}
+
+/**
+ * Refund only when Proxy-Cheap never issued an order id.
+ * An issued id means the upstream order exists, so the local debit stays until that order is fulfilled.
+ */
+export function shouldRefundAfterUpstreamFailure(orderId: string | null | undefined): boolean {
+  return !orderId?.trim();
+}
+
+/** Decides the next step from the ledger so a retry cannot place a second upstream order. */
+export function purchaseAction(input: {
+  status: "pending" | "paid" | "failed";
+  upstreamOrderId: string | null;
+  claimed: boolean;
+}): PurchaseAction {
+  if (input.status === "paid") return "return_paid";
+  if (input.status === "failed") return "reject_failed";
+  if (input.upstreamOrderId?.trim()) return "resume_upstream";
+  if (!input.claimed) return "wait";
+  return "provision";
 }
 
 export function parsePurchaseBody(value: unknown): PurchaseBody | null {
@@ -44,8 +92,10 @@ export function parsePurchaseBody(value: unknown): PurchaseBody | null {
   const quantity = readNumber(row, "quantity");
   const priceBrl = readNumber(row, "priceBrl");
   const protocolRaw = readString(row, "protocol")?.toUpperCase();
-  const protocol = protocolRaw === "SOCKS5" ? "SOCKS5" : protocolRaw === "HTTP" ? "HTTP" : undefined;
-  if (!userId || !serviceId || !planId || !country || quantity === null || priceBrl === null) return null;
+  const protocol =
+    protocolRaw === "SOCKS5" ? "SOCKS5" : protocolRaw === "HTTP" ? "HTTP" : undefined;
+  if (!userId || !serviceId || !planId || !country || quantity === null || priceBrl === null)
+    return null;
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 500) return null;
   if (!Number.isFinite(priceBrl) || priceBrl <= 0) return null;
   return { userId, serviceId, planId, quantity, country, priceBrl: round2(priceBrl), protocol };
@@ -89,127 +139,339 @@ export async function handlePurchaseRequest(request: Request): Promise<Response>
   const body = parsePurchaseBody(payload);
   if (!body) return json({ success: false, error: "Pedido inválido." }, 400);
 
+  const headerKey = request.headers.get("idempotency-key");
+  const idempotencyRaw = headerKey?.trim()
+    ? headerKey
+    : readString(asRecord(payload), "idempotencyKey");
+  const suppliedKey = normalizeIdempotencyKey(idempotencyRaw);
+  if (idempotencyRaw?.trim() && !suppliedKey)
+    return json({ success: false, error: "Chave de idempotência inválida." }, 400);
+  const externalId = suppliedKey ?? crypto.randomUUID();
+
   const expected = catalogPrice(body);
   if (expected === null || Math.abs(expected - body.priceBrl) > 0.009) {
     return json({ success: false, error: "Valor do pedido não confere." }, 400);
   }
 
-  const supabase = userSupabase(token);
-  if (!supabase) return json({ success: false, error: "Supabase não está configurado." }, 500);
+  const userClient = userSupabase(token);
+  if (!userClient) return json({ success: false, error: "Supabase não está configurado." }, 500);
+  const admin = supabaseAdmin();
+  if (!admin)
+    return json({ success: false, error: "Supabase administrativo não está configurado." }, 500);
 
-  const userResult = await supabase.auth.getUser(token);
+  const userResult = await userClient.auth.getUser(token);
   const user = userResult.data.user;
-  if (userResult.error || !user) return json({ success: false, error: "Sessão expirada. Entre novamente." }, 401);
-  if (user.id !== body.userId) return json({ success: false, error: "Utilizador não autorizado." }, 403);
-
-  const balanceResult = await supabase.from("profiles").select("balance").eq("id", user.id).maybeSingle();
-  if (balanceResult.error) return json({ success: false, error: "Não foi possível ler o saldo." }, 500);
-  const balance = readNumber((balanceResult.data ?? {}) as Record<string, unknown>, "balance") ?? 0;
-  if (balance < body.priceBrl) return json({ success: false, error: "Saldo insuficiente" }, 400);
+  if (userResult.error || !user)
+    return json({ success: false, error: "Sessão expirada. Entre novamente." }, 401);
+  if (user.id !== body.userId)
+    return json({ success: false, error: "Utilizador não autorizado." }, 403);
 
   const serviceId = body.serviceId as ProxyTypeId;
   const type = getProxyType(serviceId);
-  let provisioned: { orderId: string; connections: Connection[] };
+  const countryName = getCountry(body.country).name;
+  const description = `Compra ${type.name} · ${countryName}`;
+
+  const debitInput = {
+    userId: user.id,
+    amount: body.priceBrl,
+    externalId,
+    description,
+    serviceId: body.serviceId,
+    planId: body.planId,
+    quantity: body.quantity,
+    country: body.country,
+    protocol: body.protocol ?? "HTTP",
+  };
+  let debit: LedgerSnapshot;
   try {
-    provisioned = isMockMode()
-      ? await mockProvision(body.quantity, type.unit)
-      : await liveProvision(body);
+    debit = await debitPurchase(admin, debitInput);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Não foi possível provisionar o proxy.";
-    return json({ success: false, error: message }, 502);
+    return ledgerFailure(error);
   }
 
-  const nextBalance = round2(balance - body.priceBrl);
-  const debit = await supabase
-    .from("profiles")
-    .update({ balance: nextBalance })
-    .eq("id", user.id)
-    .gte("balance", body.priceBrl)
-    .select("balance");
-  if (debit.error) return json({ success: false, error: "Não foi possível debitar o saldo." }, 500);
-  if (!debit.data?.length) return json({ success: false, error: "Saldo insuficiente" }, 400);
+  const initialAction = purchaseAction({
+    status: debit.status,
+    upstreamOrderId: debit.upstreamOrderId,
+    claimed: false,
+  });
+  if (initialAction === "return_paid") return paidResponse(debit, body.serviceId, countryName);
+  if (initialAction === "reject_failed") {
+    return json(
+      { success: false, error: "Esta tentativa de compra já falhou. Inicie uma nova compra." },
+      409,
+    );
+  }
+
+  let upstreamOrderId = debit.upstreamOrderId;
+  let connections: Connection[] | null = null;
+
+  if (initialAction !== "resume_upstream") {
+    let claim;
+    try {
+      claim = await claimPurchase(admin, debit.orderId);
+    } catch (error) {
+      return ledgerFailure(error);
+    }
+    if (claim.reason === "failed") {
+      return json(
+        { success: false, error: "Esta tentativa de compra já falhou. Inicie uma nova compra." },
+        409,
+      );
+    }
+    if (claim.reason === "paid") {
+      try {
+        return paidResponse(await debitPurchase(admin, debitInput), body.serviceId, countryName);
+      } catch (error) {
+        return ledgerFailure(error);
+      }
+    }
+    if (claim.upstreamOrderId) upstreamOrderId = claim.upstreamOrderId;
+    const claimedAction = purchaseAction({
+      status: "pending",
+      upstreamOrderId,
+      claimed: claim.claimed,
+    });
+    if (claimedAction === "wait") {
+      return json({ success: false, error: "Esta compra já está em andamento." }, 409);
+    }
+    if (claimedAction === "provision") {
+      try {
+        if (isMockMode()) {
+          const mock = await mockProvision(body.quantity, type.unit);
+          upstreamOrderId = mock.orderId;
+          connections = mock.connections;
+        } else {
+          upstreamOrderId = await executeLiveOrder(body);
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Não foi possível provisionar o proxy.";
+        try {
+          await refundPurchase(admin, debit.orderId);
+        } catch (refundError) {
+          console.error(
+            "[brazilproxy] Pedido upstream falhou e o estorno não foi concluído.",
+            debit.orderId,
+            refundError,
+          );
+          return json(
+            {
+              success: false,
+              error: "O pedido falhou e o estorno do saldo não foi concluído. Contate o suporte.",
+            },
+            502,
+          );
+        }
+        return json({ success: false, error: message }, 502);
+      }
+
+      if (!upstreamOrderId || shouldRefundAfterUpstreamFailure(upstreamOrderId)) {
+        try {
+          await refundPurchase(admin, debit.orderId);
+        } catch (refundError) {
+          console.error(
+            "[brazilproxy] Pedido sem id e o estorno não foi concluído.",
+            debit.orderId,
+            refundError,
+          );
+          return json(
+            {
+              success: false,
+              error: "O pedido falhou e o estorno do saldo não foi concluído. Contate o suporte.",
+            },
+            502,
+          );
+        }
+        return json({ success: false, error: "A Proxy-Cheap não devolveu o id do pedido." }, 502);
+      }
+
+      try {
+        await recordUpstreamOrder(admin, debit.orderId, upstreamOrderId);
+      } catch (error) {
+        if (
+          error instanceof LedgerError &&
+          (error.code === "order_failed" || error.code === "refund_blocked")
+        ) {
+          return ledgerFailure(error);
+        }
+        console.warn(
+          "[brazilproxy] O id upstream ainda não foi gravado. A conclusão do pedido vai tentar de novo.",
+          error,
+        );
+      }
+    }
+  }
+
+  if (!connections) {
+    if (!upstreamOrderId) {
+      return json({ success: false, error: "Não foi possível localizar o pedido upstream." }, 502);
+    }
+    if (isMockMode()) {
+      return json(
+        {
+          success: false,
+          error:
+            "O pedido já foi enviado e as credenciais ainda não foram gravadas. O saldo permanece debitado.",
+        },
+        502,
+      );
+    }
+    try {
+      connections = await fetchLiveProxies(upstreamOrderId);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Não foi possível ler as credenciais do proxy.";
+      console.error(
+        "[brazilproxy] Pedido upstream criado sem credenciais.",
+        upstreamOrderId,
+        message,
+      );
+      return json(
+        {
+          success: false,
+          error: `${message} O saldo permanece debitado até as credenciais serem gravadas.`,
+          upstreamOrderId,
+        },
+        502,
+      );
+    }
+  }
 
   const expiresAt = expiryFromPlan(body.planId);
-  const countryName = getCountry(body.country).name;
-  const rows = provisioned.connections.map((connection) => ({
-    user_id: user.id,
-    host: connection.host,
-    port: connection.port,
-    username: connection.username,
-    password: connection.password,
-    gb_limit: type.unit === "GB" ? body.quantity : 0,
-    gb_used: 0,
-    status: "active",
-    protocol: body.protocol ?? "HTTP",
-    proxy_type: type.short,
-    country: countryName,
-    expires_at: expiresAt,
-  }));
-
-  const inserted = await supabase.from("proxies").insert(rows).select(PROXY_COLUMNS);
-  if (inserted.error || !inserted.data?.length) {
-    await supabase.from("profiles").update({ balance }).eq("id", user.id);
-    return json({ success: false, error: inserted.error?.message ?? "Não foi possível gravar o proxy." }, 500);
+  const settledDescription = `${description} · pedido ${upstreamOrderId}`;
+  try {
+    const completed = await completePurchase(
+      admin,
+      debit.orderId,
+      upstreamOrderId,
+      proxyRows(body, connections, type.unit, type.short, countryName, expiresAt),
+      settledDescription,
+    );
+    return paidResponse(completed, body.serviceId, countryName);
+  } catch (error) {
+    console.error(
+      "[brazilproxy] Proxy comprado na origem, mas a gravação local falhou.",
+      upstreamOrderId,
+      error,
+    );
+    if (error instanceof LedgerError && error.status < 500) return ledgerFailure(error);
+    return json(
+      {
+        success: false,
+        error: `O pedido ${upstreamOrderId} foi criado na Proxy-Cheap e o saldo permanece debitado, mas as credenciais não foram gravadas.`,
+        upstreamOrderId,
+      },
+      502,
+    );
   }
-
-  const description = `Compra ${type.name} · ${countryName} · pedido ${provisioned.orderId}`;
-  const transaction = await supabase.from("transactions").insert({
-    user_id: user.id,
-    amount: round2(-body.priceBrl),
-    payment_method: "balance",
-    status: "paid",
-    description,
-  });
-  if (transaction.error) {
-    console.warn("[brazilproxy] Proxy entregue, mas a transação não foi gravada.", transaction.error.message);
-  }
-
-  const first = inserted.data[0] as Record<string, unknown>;
-  const proxy = toProvisioned(first, provisioned.orderId, body.serviceId, countryName, expiresAt);
-  return json({ success: true, proxy });
 }
 
-async function mockProvision(quantity: number, unit: "GB" | "IP"): Promise<{ orderId: string; connections: Connection[] }> {
+async function mockProvision(
+  quantity: number,
+  unit: "GB" | "IP",
+): Promise<{ orderId: string; connections: Connection[] }> {
   await delay(800);
   return { orderId: `mock_${Date.now()}`, connections: buildMockConnections(quantity, unit) };
 }
 
-async function liveProvision(body: PurchaseBody): Promise<{ orderId: string; connections: Connection[] }> {
+async function executeLiveOrder(body: PurchaseBody): Promise<string> {
+  const headers = upstreamHeaders();
+  const orderResponse = await fetch(
+    `https://api.proxy-cheap.com/v2/order/${encodeURIComponent(body.serviceId)}/execute`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ planId: body.planId, quantity: body.quantity, country: body.country }),
+    },
+  );
+  const orderPayload = await readJson(orderResponse);
+  if (!orderResponse.ok)
+    throw new Error(upstreamMessage(orderPayload) ?? "A Proxy-Cheap recusou o pedido.");
+  const orderId = readOrderId(orderPayload);
+  if (!orderId) throw new Error("A Proxy-Cheap não devolveu o id do pedido.");
+  return orderId;
+}
+
+async function fetchLiveProxies(orderId: string): Promise<Connection[]> {
+  const headers = upstreamHeaders();
+  const detailResponse = await fetch(
+    `https://api.proxy-cheap.com/orders/${encodeURIComponent(orderId)}/proxies`,
+    { headers },
+  );
+  const detailPayload = await readJson(detailResponse);
+  const connections = dedupeConnections(readConnections(detailPayload));
+  if (!detailResponse.ok && connections.length === 0) {
+    throw new Error(
+      upstreamMessage(detailPayload) ??
+        `Pedido ${orderId} criado, mas as credenciais não foram lidas.`,
+    );
+  }
+  if (connections.length === 0)
+    throw new Error(`Pedido ${orderId} não devolveu credenciais de conexão.`);
+  return connections;
+}
+
+function upstreamHeaders(): Record<string, string> {
   const apiKey = process.env.PROXY_CHEAP_API_KEY?.trim() ?? "";
   const apiSecret = process.env.PROXY_CHEAP_API_SECRET?.trim() ?? "";
   if (!apiKey || !apiSecret) throw new Error("Proxy-Cheap não está configurado neste ambiente.");
-
-  const headers = {
+  return {
     "Content-Type": "application/json",
     Accept: "application/json",
     "X-Api-Key": apiKey,
     "X-Api-Secret": apiSecret,
   };
-  const orderResponse = await fetch(`https://api.proxy-cheap.com/v2/order/${encodeURIComponent(body.serviceId)}/execute`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ planId: body.planId, quantity: body.quantity, country: body.country }),
-  });
-  const orderPayload = await readJson(orderResponse);
-  if (!orderResponse.ok) throw new Error(upstreamMessage(orderPayload) ?? "A Proxy-Cheap recusou o pedido.");
-  const orderId = readOrderId(orderPayload);
-  if (!orderId) throw new Error("A Proxy-Cheap não devolveu o id do pedido.");
-
-  const detailResponse = await fetch(`https://api.proxy-cheap.com/orders/${encodeURIComponent(orderId)}/proxies`, { headers });
-  const detailPayload = await readJson(detailResponse);
-  const connections = [...readConnections(detailPayload), ...readConnections(orderPayload)];
-  const unique = dedupeConnections(connections);
-  if (!detailResponse.ok && unique.length === 0) {
-    throw new Error(upstreamMessage(detailPayload) ?? `Pedido ${orderId} criado, mas as credenciais não foram lidas.`);
-  }
-  if (unique.length === 0) throw new Error(`Pedido ${orderId} não devolveu credenciais de conexão.`);
-  return { orderId, connections: unique };
 }
 
+function proxyRows(
+  body: PurchaseBody,
+  connections: Connection[],
+  unit: "GB" | "IP",
+  proxyType: string,
+  countryName: string,
+  expiresAt: string,
+): ProxyInsert[] {
+  return connections.map((connection) => ({
+    host: connection.host,
+    port: connection.port,
+    username: connection.username,
+    password: connection.password,
+    gb_limit: unit === "GB" ? body.quantity : 0,
+    gb_used: 0,
+    status: "active",
+    protocol: body.protocol ?? "HTTP",
+    proxy_type: proxyType,
+    country: countryName,
+    expires_at: expiresAt,
+  }));
+}
+
+function paidResponse(snapshot: LedgerSnapshot, serviceId: string, countryName: string): Response {
+  const first = snapshot.proxies[0];
+  if (!first || !snapshot.upstreamOrderId) {
+    return json({ success: false, error: "Pedido pago sem credenciais gravadas." }, 500);
+  }
+  const proxy = toProvisioned(first, snapshot.upstreamOrderId, serviceId, countryName);
+  return json({ success: true, proxy });
+}
+
+function ledgerFailure(error: unknown): Response {
+  if (error instanceof LedgerError)
+    return json({ success: false, error: error.message }, error.status);
+  console.error("[brazilproxy] Falha ao movimentar o saldo.", error);
+  return json({ success: false, error: "Não foi possível atualizar o saldo." }, 500);
+}
+
+/** Verifies the caller. Balance writes do not use this client. */
 function userSupabase(accessToken: string): SupabaseClient | null {
   const url = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "").trim();
-  const anonKey = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "").trim();
-  if (!url || !anonKey || url === "https://your-project.supabase.co" || anonKey === "your-anon-key") return null;
+  const anonKey = (
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    ""
+  ).trim();
+  if (!url || !anonKey || url === "https://your-project.supabase.co" || anonKey === "your-anon-key")
+    return null;
   return createClient(url, anonKey, {
     global: { headers: { Authorization: `Bearer ${accessToken}` } },
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
@@ -217,28 +479,23 @@ function userSupabase(accessToken: string): SupabaseClient | null {
 }
 
 function toProvisioned(
-  row: Record<string, unknown>,
+  row: StoredProxy,
   orderId: string,
   serviceId: string,
   country: string,
-  expiresAt: string,
 ): ProvisionedProxy {
-  const host = readString(row, "host") ?? "";
-  const port = readNumber(row, "port") ?? 0;
-  const username = readString(row, "username") ?? "";
-  const password = readString(row, "password") ?? "";
   return {
-    id: readString(row, "id") ?? "",
+    id: row.id,
     orderId,
     serviceId,
     country,
-    host,
-    port,
-    username,
-    password,
+    host: row.host,
+    port: row.port,
+    username: row.username,
+    password: row.password,
     status: "active",
-    expiresAt: readString(row, "expires_at") ?? expiresAt,
-    connection: `${host}:${port}:${username}:${password}`,
+    expiresAt: row.expiresAt ?? "",
+    connection: `${row.host}:${row.port}:${row.username}:${row.password}`,
   };
 }
 
@@ -251,8 +508,12 @@ function readConnections(payload: unknown): Connection[] {
 function readConnection(value: unknown): Connection | null {
   if (!value || typeof value !== "object") return null;
   const row = value as Record<string, unknown>;
-  const nested = row["proxy"] && typeof row["proxy"] === "object" ? (row["proxy"] as Record<string, unknown>) : row;
-  const host = readString(nested, "host") || readString(nested, "ip") || readString(nested, "hostname");
+  const nested =
+    row["proxy"] && typeof row["proxy"] === "object"
+      ? (row["proxy"] as Record<string, unknown>)
+      : row;
+  const host =
+    readString(nested, "host") || readString(nested, "ip") || readString(nested, "hostname");
   const port = readNumber(nested, "port");
   const username = readString(nested, "username") || readString(nested, "user");
   const password = readString(nested, "password") || readString(nested, "pass");
@@ -317,6 +578,10 @@ function bearerToken(request: Request): string | null {
   if (!header) return null;
   const match = /^Bearer\s+(.+)$/i.exec(header.trim());
   return match?.[1]?.trim() || null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
 
 function readString(row: Record<string, unknown>, key: string): string | null {

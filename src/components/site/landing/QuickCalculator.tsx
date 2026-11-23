@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { BadgePercent, Zap } from "lucide-react";
+import { BadgePercent, Check, Zap } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PixDialog } from "@/components/brand/PixDialog";
-import { COUNTRIES, PROXY_TYPES, getProxyType, quote, type ProxyTypeId } from "@/lib/pricing";
+import { PixReleaseBanner } from "@/components/site/landing/PixReleaseBanner";
+import { FEATURED_PRODUCTS, getFeaturedProduct } from "@/components/site/landing/featured-products";
+import { COUNTRIES, getProxyType, quote, type ProxyTypeId } from "@/lib/pricing";
 import { useCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +19,7 @@ export function QuickCalculator() {
   const [protocol, setProtocol] = useState<"HTTP" | "SOCKS5">("SOCKS5");
   const [pix, setPix] = useState(false);
   const type = getProxyType(typeId);
+  const featured = getFeaturedProduct(typeId);
   const q = quote(typeId, country, qty);
   const countryObj = COUNTRIES.find((c) => c.code === country)!;
 
@@ -30,26 +33,46 @@ export function QuickCalculator() {
       </div>
 
       <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tipo de proxy</label>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {PROXY_TYPES.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => {
-              setTypeId(t.id);
-              setQty(t.defaultQty);
-            }}
-            className={cn(
-              "rounded-lg border px-3 py-2 text-left text-sm font-medium transition-all",
-              typeId === t.id ? "border-primary bg-primary-soft text-primary ring-1 ring-primary" : "hover:border-primary/40 hover:bg-surface",
-            )}
-          >
-            {t.short}
-            <span className="block text-[11px] font-normal text-muted-foreground">
-              {format(t.basePrice)}/{t.unit === "GB" ? "GB" : "IP·mês"}
-            </span>
-          </button>
-        ))}
+      <div className="grid gap-2 sm:grid-cols-5">
+        {FEATURED_PRODUCTS.map((product) => {
+          const catalog = getProxyType(product.id);
+          const selected = typeId === product.id;
+          return (
+            <button
+              key={product.id}
+              onClick={() => {
+                setTypeId(product.id);
+                setQty(catalog.defaultQty);
+              }}
+              className={cn(
+                "rounded-xl border px-3 py-3 text-left transition-all",
+                product.primary ? "sm:col-span-3" : "sm:col-span-2",
+                selected ? "border-primary bg-primary-soft text-primary ring-1 ring-primary" : "hover:border-primary/40 hover:bg-surface",
+              )}
+            >
+              <span className={cn("text-[10px] font-bold uppercase tracking-wider", product.primary ? "text-amber-foreground" : "text-muted-foreground")}>
+                {product.badge}
+              </span>
+              <span className="mt-1 block text-sm font-semibold leading-snug">{product.title}</span>
+              <span className="mt-1 block text-[11px] font-normal text-muted-foreground">
+                {format(catalog.basePrice)}/{catalog.unit === "GB" ? "GB" : "IP·mês"}
+              </span>
+            </button>
+          );
+        })}
       </div>
+      {featured.primary ? (
+        <ul className="mt-3 space-y-1.5 rounded-xl border border-primary/20 bg-primary-soft/60 p-3">
+          {featured.points.slice(0, 3).map((point) => (
+            <li key={point} className="flex items-start gap-2 text-xs font-medium text-foreground">
+              <Check className="mt-0.5 size-3.5 shrink-0 text-primary" />
+              {point}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-xs font-medium leading-relaxed text-slate-800">{featured.note}</p>
+      )}
 
       <div className="mt-4 grid grid-cols-2 gap-3">
         <div>
@@ -97,7 +120,7 @@ export function QuickCalculator() {
             className="h-8 w-24 text-right font-mono"
           />
         </div>
-        <Slider value={[qty]} min={type.min} max={Math.min(type.max, type.unit === "GB" ? 200 : type.id === "ipv6" ? 2000 : 250)} step={type.step} onValueChange={([v]) => setQty(v)} />
+        <Slider value={[qty]} min={type.min} max={Math.min(type.max, 250)} step={type.step} onValueChange={([v]) => setQty(v)} />
         <div className="mt-2 flex gap-1.5">
           {[10, 50, 100, 500].map((t) => (
             <span key={t} className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", qty >= t ? "bg-amber-soft text-amber-foreground" : "bg-muted text-muted-foreground")}>
@@ -128,14 +151,15 @@ export function QuickCalculator() {
         </div>
       </div>
 
-      <Button variant="brand" size="xl" className="mt-4 w-full" onClick={() => setPix(true)}>
-        <Zap /> Comprar Agora via Pix
+      <PixReleaseBanner className="mt-4" />
+      <Button variant="brand" size="xl" className="mt-3 w-full" onClick={() => setPix(true)}>
+        <Zap /> Comprar agora
       </Button>
       <PixDialog
         open={pix}
         onOpenChange={setPix}
         amount={q.total}
-        description={`${qty} ${type.unit === "GB" ? "GB" : "IPs"} ${type.name} · ${countryObj.name} · ${protocol === "HTTP" ? "HTTPS" : protocol}`}
+        description={`${qty} ${type.unit === "GB" ? "GB" : "IPs"} ${featured.title} · ${countryObj.name} · ${protocol === "HTTP" ? "HTTPS" : protocol}`}
       />
     </div>
   );

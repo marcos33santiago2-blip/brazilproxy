@@ -18,6 +18,10 @@ import { Route as ClienteIndexRouteImport } from './routes/cliente.index'
 import { Route as ClienteComprarRouteImport } from './routes/cliente.comprar'
 import { Route as ClienteProxiesRouteImport } from './routes/cliente.proxies'
 import { Route as ApiProxyPurchaseRouteImport } from './routes/api.proxy.purchase'
+import { Route as ApiWebhookMercadopagoRouteImport } from './routes/api.webhook.mercadopago'
+import { Route as ApiPaymentsMercadopagoCardRouteImport } from './routes/api.payments.mercadopago.card'
+import { Route as ApiPaymentsMercadopagoPixRouteImport } from './routes/api.payments.mercadopago.pix'
+import { Route as ApiPaymentsMercadopagoStatusRouteImport } from './routes/api.payments.mercadopago.status'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -64,6 +68,29 @@ const ApiProxyPurchaseRoute = ApiProxyPurchaseRouteImport.update({
   path: '/api/proxy/purchase',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiWebhookMercadopagoRoute = ApiWebhookMercadopagoRouteImport.update({
+  id: '/api/webhook/mercadopago',
+  path: '/api/webhook/mercadopago',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPaymentsMercadopagoCardRoute =
+  ApiPaymentsMercadopagoCardRouteImport.update({
+    id: '/api/payments/mercadopago/card',
+    path: '/api/payments/mercadopago/card',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPaymentsMercadopagoPixRoute =
+  ApiPaymentsMercadopagoPixRouteImport.update({
+    id: '/api/payments/mercadopago/pix',
+    path: '/api/payments/mercadopago/pix',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPaymentsMercadopagoStatusRoute =
+  ApiPaymentsMercadopagoStatusRouteImport.update({
+    id: '/api/payments/mercadopago/status',
+    path: '/api/payments/mercadopago/status',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -75,6 +102,10 @@ export interface FileRoutesByFullPath {
   '/cliente/proxies': typeof ClienteProxiesRoute
   '/cliente/': typeof ClienteIndexRoute
   '/api/proxy/purchase': typeof ApiProxyPurchaseRoute
+  '/api/webhook/mercadopago': typeof ApiWebhookMercadopagoRoute
+  '/api/payments/mercadopago/card': typeof ApiPaymentsMercadopagoCardRoute
+  '/api/payments/mercadopago/pix': typeof ApiPaymentsMercadopagoPixRoute
+  '/api/payments/mercadopago/status': typeof ApiPaymentsMercadopagoStatusRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -85,6 +116,10 @@ export interface FileRoutesByTo {
   '/cliente/proxies': typeof ClienteProxiesRoute
   '/cliente': typeof ClienteIndexRoute
   '/api/proxy/purchase': typeof ApiProxyPurchaseRoute
+  '/api/webhook/mercadopago': typeof ApiWebhookMercadopagoRoute
+  '/api/payments/mercadopago/card': typeof ApiPaymentsMercadopagoCardRoute
+  '/api/payments/mercadopago/pix': typeof ApiPaymentsMercadopagoPixRoute
+  '/api/payments/mercadopago/status': typeof ApiPaymentsMercadopagoStatusRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -97,6 +132,10 @@ export interface FileRoutesById {
   '/cliente/proxies': typeof ClienteProxiesRoute
   '/cliente/': typeof ClienteIndexRoute
   '/api/proxy/purchase': typeof ApiProxyPurchaseRoute
+  '/api/webhook/mercadopago': typeof ApiWebhookMercadopagoRoute
+  '/api/payments/mercadopago/card': typeof ApiPaymentsMercadopagoCardRoute
+  '/api/payments/mercadopago/pix': typeof ApiPaymentsMercadopagoPixRoute
+  '/api/payments/mercadopago/status': typeof ApiPaymentsMercadopagoStatusRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -110,6 +149,10 @@ export interface FileRouteTypes {
     | '/cliente/proxies'
     | '/cliente/'
     | '/api/proxy/purchase'
+    | '/api/webhook/mercadopago'
+    | '/api/payments/mercadopago/card'
+    | '/api/payments/mercadopago/pix'
+    | '/api/payments/mercadopago/status'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -120,6 +163,10 @@ export interface FileRouteTypes {
     | '/cliente/proxies'
     | '/cliente'
     | '/api/proxy/purchase'
+    | '/api/webhook/mercadopago'
+    | '/api/payments/mercadopago/card'
+    | '/api/payments/mercadopago/pix'
+    | '/api/payments/mercadopago/status'
   id:
     | '__root__'
     | '/'
@@ -131,6 +178,10 @@ export interface FileRouteTypes {
     | '/cliente/proxies'
     | '/cliente/'
     | '/api/proxy/purchase'
+    | '/api/webhook/mercadopago'
+    | '/api/payments/mercadopago/card'
+    | '/api/payments/mercadopago/pix'
+    | '/api/payments/mercadopago/status'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -140,6 +191,10 @@ export interface RootRouteChildren {
   EntrarRoute: typeof EntrarRoute
   RevendaRoute: typeof RevendaRoute
   ApiProxyPurchaseRoute: typeof ApiProxyPurchaseRoute
+  ApiWebhookMercadopagoRoute: typeof ApiWebhookMercadopagoRoute
+  ApiPaymentsMercadopagoCardRoute: typeof ApiPaymentsMercadopagoCardRoute
+  ApiPaymentsMercadopagoPixRoute: typeof ApiPaymentsMercadopagoPixRoute
+  ApiPaymentsMercadopagoStatusRoute: typeof ApiPaymentsMercadopagoStatusRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -207,6 +262,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiProxyPurchaseRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/webhook/mercadopago': {
+      id: '/api/webhook/mercadopago'
+      path: '/api/webhook/mercadopago'
+      fullPath: '/api/webhook/mercadopago'
+      preLoaderRoute: typeof ApiWebhookMercadopagoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/payments/mercadopago/card': {
+      id: '/api/payments/mercadopago/card'
+      path: '/api/payments/mercadopago/card'
+      fullPath: '/api/payments/mercadopago/card'
+      preLoaderRoute: typeof ApiPaymentsMercadopagoCardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/payments/mercadopago/pix': {
+      id: '/api/payments/mercadopago/pix'
+      path: '/api/payments/mercadopago/pix'
+      fullPath: '/api/payments/mercadopago/pix'
+      preLoaderRoute: typeof ApiPaymentsMercadopagoPixRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/payments/mercadopago/status': {
+      id: '/api/payments/mercadopago/status'
+      path: '/api/payments/mercadopago/status'
+      fullPath: '/api/payments/mercadopago/status'
+      preLoaderRoute: typeof ApiPaymentsMercadopagoStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -232,6 +315,10 @@ const rootRouteChildren: RootRouteChildren = {
   EntrarRoute: EntrarRoute,
   RevendaRoute: RevendaRoute,
   ApiProxyPurchaseRoute: ApiProxyPurchaseRoute,
+  ApiWebhookMercadopagoRoute: ApiWebhookMercadopagoRoute,
+  ApiPaymentsMercadopagoCardRoute: ApiPaymentsMercadopagoCardRoute,
+  ApiPaymentsMercadopagoPixRoute: ApiPaymentsMercadopagoPixRoute,
+  ApiPaymentsMercadopagoStatusRoute: ApiPaymentsMercadopagoStatusRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
