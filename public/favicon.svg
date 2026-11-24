@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="BrazilProxy">
+  <defs>
+    <linearGradient id="brand" gradientUnits="userSpaceOnUse" x1="2.1" y1="8" x2="29.9" y2="24">
+      <stop offset="0%" stop-color="#4F46E5" />
+      <stop offset="55%" stop-color="#0081F1" />
+      <stop offset="100%" stop-color="#06B6D4" />
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="12" fill="url(#brand)" />
+  <g transform="translate(8 8) scale(0.6667)">
+    <path d="M4 12h4l3-7 4 14 3-7h2" fill="none" stroke="#FAFCFE" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+</svg>
